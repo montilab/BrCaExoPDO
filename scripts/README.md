@@ -6,7 +6,7 @@ This folder contains all the scripts used for the analysis and processing tasks 
 The `scripts` folder is structured as follows:
 
 - **`utils.R`**: Scripts for required packages, color vectors, and custom functions.
-- **`preprocessing.R`**: Scripts for cleaning and preprocessing the raw data.
+- **`preprocess.R`**: Scripts for cleaning and preprocessing the raw data.
 - **`annotation.R`**: Scripts for annotating cells from reference data.
 - **`objectQC.R`**: Scripts for quality control of processed data.
 - **`integration.R`**: Scripts for integration of data by sample.
@@ -29,7 +29,7 @@ The scripts in this repository utilize the following publicly available data and
 
 ### 3. scIB
 - **scIB**: [Setup Documentation](https://scib-metrics.readthedocs.io/en/stable/index.html)
-  - scIB is a benchmarking platform used to assess the performance of various single-cell integration methods. Refer to the documentation for setup and usage details.
+  - scIB (Single-cell Integration Benchmarking) is a benchmarking toolkit used to assess the performance of various single-cell integration methods. Refer to the documentation for setup and usage details.
 
 ### 4. inferCNV
 - **inferCNV**: [Github Repository](https://github.com/broadinstitute/inferCNV/wiki)
