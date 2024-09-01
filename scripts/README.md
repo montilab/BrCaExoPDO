@@ -59,10 +59,9 @@ The scripts in this repository utilize the following publicly available tools:
 - **Monocle3**: [Paper](https://www.nature.com/articles/s41586-019-0969-x) | [Website](http://cole-trapnell-lab.github.io/monocle3/)
   - Monocle3 is a tool for trajectory inference and pseudotime analysis of single-cell data. Visit the website for tutorials and detailed usage information.
 
-
 ## Dependencies
 
-To ensure smooth execution of the scripts, please install the following R packages. Some packages are available on CRAN and Bioconductor, while others need to be installed directly from GitHub.
+To ensure smooth execution of the scripts, please install the following R packages. Some packages are available on CRAN and Bioconductor, while others need to be installed directly from GitHub. Please ensure that you are using R version 4.3.1 or higher to avoid compatibility issues with these packages.
 
 ```r
 install.packages(c(
