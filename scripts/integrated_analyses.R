@@ -15,7 +15,7 @@ pdo@meta.data$finalized_fine_anno_short[pdo@meta.data$finalized_fine_anno =="Bas
 pdo@meta.data$finalized_fine_anno_short[pdo@meta.data$finalized_fine_anno =="Cycling_Epithelial"] <- "CYC"
 pdo@meta.data$finalized_fine_anno_short[pdo@meta.data$finalized_fine_anno =="Luminal_Progenitor"] <- "LP"
 
-pdo_circ <- read.csv("../results/analyses/organoid_circularity.csv")
+pdo_circ <- read.csv("../data/organoid_circularity.csv")
 
 # 8.1 ligand receptor analysis  ####
 #vignette for basic: https://htmlpreview.github.io/?https://github.com/jinworks/CellChat/blob/master/tutorial/CellChat-vignette.html
