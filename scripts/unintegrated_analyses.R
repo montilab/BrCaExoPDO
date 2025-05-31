@@ -161,6 +161,20 @@ fgsea_results_lumtum = run_through_fgsea(msigdb_list = msigdb_of_interest,
 # saving fgsea results because they take a while
 saveRDS(fgsea_results_lumtum, file.path(save_path, "fgsea_results_lumtum.rds"))
 
+# nd vs t2d
+Idents(object = pdo_lumt) <- "treatment"
+
+n.c.lumtum <- FindMarkers(pdo_lumt, ident.1 = "NET", ident.2 = "UT", 
+                          test.use="MAST",  latent.vars="patient_replicate")
+t.c.lumtum <- FindMarkers(pdo_lumt, ident.1 = "DET", ident.2 = "UT", 
+                          test.use="MAST",  latent.vars="patient_replicate")
+t.n.lumtum <- FindMarkers(pdo_lumt, ident.1 = "DET", ident.2 = "NET", 
+                          test.use="MAST",  latent.vars="patient_replicate")
+
+write.csv(n.c.lumtum, file.path(save_path,, "n.c.lumtum.csv"))
+write.csv(t.c.lumtum, file.path(save_path,, "t.c.lumtum.csv"))
+write.csv(t.n.lumtum, file.path(save_path,, "t.n.lumtum.csv"))
+
 # 7.6 lumtumor proportion shift ####
 prop_calcs = pdo@meta.data %>%
   dplyr::filter(finalized_broad_anno %in% c("Luminal_Tumor")) %>%
