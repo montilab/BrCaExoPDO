@@ -46,11 +46,20 @@ library(dendsort)
 library(lmerTest)
 library(emmeans)
 library(rstatix)
-library(expm)
+library(expm)#devtools::install_github("montilab/brcasurv")
+library(brcasurv)
+library(patchwork)
+library(grid)
+library(multiMiR)
+library(K2Taxonomer)
+library(AUCell)
+library(ggdendro)
+library(Biobase)
 # database of color vectors ####
 treatment_colors = c("dodgerblue2", "orange", "grey80")
 patient_colors = c("#E41A1C", "#2840ad", "#4DAF4A")
 group_colors = c("#f2797b", "#E41A1C", "#610b0c", "#4869f0", "#2847c9", "#2840ad","#122680", "#031252","#a1f09e", "#73d66f", "#4DAF4A", "#378c34", "#246b21", "#134511")
+extra_yelred <- colorRampPalette(c("#FD8D3C", "#FC4E2A", "#E31A1C", "#BD0026", "#800026"))
 
 broadcelltype_colors_alpha = c("#f032e6", "#000075", "#f58231",  "#aaffc3", "#e6194B", "#bfef45",
                                "#469990", "#42d4f4", "#911eb4","#3cb44b", "#ffe119", "#dcbeff")
@@ -110,6 +119,10 @@ imm_fine_anno_order_rainbow = c("Tcm", "Tem", "Teff", "Th1", "ChopT", "MAIT", "B
 
 imm_fine_anno_colors_alpha = c("#f032e6", "#3c1361", "#911eb4", "#b380ff", "#f5a4f1", "#dcbeff", "#7740c9", "#c68ff7", "#f0e8ff")
 imm_fine_anno_order_alpha = c("B", "ChopT", "Macrophage", "MAIT", "Plasma", "Tcm", "Teff", "Tem", "Th1")
+
+imm_presrainbow_order = c("Th1", "Teff", "MAIT", "Tcm", "Tem", "ChopT", "Plasma", "B", "Macrophage")
+imm_presrainbow_rainbow = c("#F02C89", "#FB943B", "#F4CD26", "#8CC63E", "#2989E3", "#724498", "grey80", "grey40", "black")
+imm_presrainbow_alpha = c("#8CC63E", "#2989E3", "#FB943B", "#F02C89", "#724498", "#F4CD26", "grey40", "grey80", "black")
 
 # preprocessing functions ####
 create_seurat_object <- function(data_dir, project_name) {
@@ -1018,4 +1031,147 @@ plotEnrichment_customcolor <- function (pathway, stats, gseaParam = 1, ticksSize
          geom_hline(yintercept = 0, colour = "black") + theme(panel.background = element_blank(), 
                                                               panel.grid.major = element_line(color = "grey92")) + 
          labs(x = "rank", y = "enrichment score"))
+}
+gsva_cox_pam50 <- function (gsva_data, 
+                            brca_data = c("TCGA", "METABRIC"), 
+                            five_year = FALSE, 
+                            adjust_age = TRUE, adjust_pam50 = TRUE,
+                            adjust_prolif = TRUE, adjust_inflam = TRUE)
+{
+  brca_data <- match.arg(brca_data, c("TCGA", "METABRIC"))
+  all_sigs <- rownames(gsva_data)
+  exp_sigs <- all_sigs[!(all_sigs %in% c("prolif", "inflam"))]
+  
+  if (five_year) {
+    surv_response <- "Surv(as.numeric(time_5), vital_status_5)"
+  } else {
+    surv_response <- "Surv(as.numeric(time), vital_status_1)"
+  }
+  
+  # Add signature values to phenotype
+  if (adjust_prolif) {
+    gsva_data[["prolif"]] <- t(Biobase::exprs(gsva_data["prolif", ]))
+  }
+  if (adjust_inflam) {
+    gsva_data[["inflam"]] <- t(Biobase::exprs(gsva_data["inflam", ]))
+  }
+  
+  # Define covariates
+  covariate_flags <- c(adjust_age, adjust_pam50, adjust_prolif, adjust_inflam)
+  if (brca_data == "TCGA") {
+    covariates <- c("age_at_index","subtype_m_rna", "prolif", "inflam")[covariate_flags]
+  } else if (brca_data == "METABRIC") {
+    covariates <- c("AGE_AT_DIAGNOSIS", "Pam50_SUBTYPE", "prolif", "inflam")[covariate_flags]
+  }
+  
+  print(paste("Adjusting for:", paste(covariates, collapse = ", ")))
+  
+  # Fit Cox models
+  cox_fits <- list()
+  for (sig in exp_sigs) {
+    gsva_data[[sig]] <- t(Biobase::exprs(gsva_data[sig, ]))
+    cox_fits[[sig]] <- survival::coxph(reformulate(c(covariates, sig), response = surv_response), 
+                                       data = Biobase::pData(gsva_data))
+  }
+  
+  return(cox_fits)
+}
+add_combined_signature <- function(eset, pos_name = "pos", neg_name = "neg", new_name = "combined") {
+  # extract expression matrix
+  exprs_mat <- Biobase::exprs(eset)
+  
+  # check if both signatures exist
+  if (!all(c(pos_name, neg_name) %in% rownames(exprs_mat))) {
+    stop("Specified 'pos' or 'neg' signatures not found in ExpressionSet.")
+  }
+  
+  # compute combined signature
+  combined <- exprs_mat[pos_name, ] - exprs_mat[neg_name, ]
+  
+  # add with proper name
+  new_exprs <- rbind(exprs_mat, combined)
+  rownames(new_exprs)[nrow(new_exprs)] <- new_name
+  
+  # needed for downstream plotting
+  eset$prolif <- Biobase::exprs(eset)["prolif", ]
+  eset$inflam <- Biobase::exprs(eset)["inflam", ]
+  
+  # return new ExpressionSet
+  Biobase::ExpressionSet(
+    assayData = new_exprs,
+    phenoData = Biobase::phenoData(eset),
+    experimentData = Biobase::experimentData(eset),
+    annotation = Biobase::annotation(eset)
+  )
+}
+add_combined_score <- function(eset, score_name = "combined", group_name = "combined_group") {
+  exprs_mat <- Biobase::exprs(eset)
+  pData <- Biobase::pData(eset)
+  if (!score_name %in% rownames(exprs_mat)) {
+    stop(paste("Signature", score_name, "not found in ExpressionSet."))}
+  
+  # add score and group to pData
+  score <- exprs_mat[score_name, ]
+  group <- ifelse(score > median(score, na.rm = TRUE), "High", "Low")
+  
+  pData[[paste0(score_name, "_score")]] <- score
+  pData[[group_name]] <- factor(group, levels = c("Low", "High"))
+  
+  Biobase::pData(eset) <- pData
+  return(eset)
+}
+format_annotation <- function(HR, lower_CI, upper_CI, pval) {
+  paste0("HR = ", HR["combined"], 
+         " (95% CI: ", lower_CI["combined"], "-", upper_CI["combined"], 
+         ")\n p < ", pval)
+}
+get_cor_tests <- function(x, y, data) {
+  apply(expand.grid(x, y), 1, function(row) {
+    res <- cor.test(data[[row[1]]], data[[row[2]]], method = "spearman")
+    data.frame(x = row[1], y = row[2], rho = res$estimate, p.value = res$p.value)
+  }) %>% do.call(rbind, .)
+}
+get_unique_pairs <- function(mirna) {
+  interact <- get_multimir(
+    mirna                 = mirna,
+    table                 = "all",
+    summary               = TRUE,
+    predicted.cutoff.type = "p",
+    predicted.cutoff      = 10,
+    use.tibble            = TRUE
+  )
+  
+  filtered <- select(interact, keytype = "type", keys = c("validated", "predicted"), columns = columns(interact))
+  unique_pairs <- filtered[!duplicated(filtered[, c("mature_mirna_id", "target_entrez")]), ]
+  
+  return(unique_pairs)
+}
+enrichment <- function(mir_name, unique_pairs, down_DE_genes, t.n.lumtum, all_genes_seurat) {
+  mir_data <- subset(unique_pairs, mature_mirna_id == mir_name)
+  if (nrow(mir_data) == 0) return(NULL)
+  
+  mir_targets <- unique(mir_data$target_symbol)
+  all_genes <- all_genes_seurat
+  
+  A <- length(intersect(mir_targets, down_DE_genes))              # targets in downregulated
+  B <- length(setdiff(mir_targets, down_DE_genes))                # targets not in downregulated
+  
+  non_targets <- setdiff(all_genes, mir_targets)
+  C <- length(intersect(non_targets, down_DE_genes))              # non-targets in downregulated
+  D <- length(setdiff(non_targets, down_DE_genes))                # non-targets not in downregulated
+  
+  contingency <- matrix(c(A, B, C, D), nrow = 2,
+                        dimnames = list("miRNA_target" = c("Yes", "No"),
+                                        "In_DE_down" = c("Yes", "No")))
+  
+  fisher_result <- fisher.test(contingency, alternative = "greater")
+  
+  data.frame(
+    miRNA = mir_name,
+    odds_ratio = fisher_result$estimate,
+    num_targets_down = A,
+    total_num_targets = length(mir_targets),
+    p_value = fisher_result$p.value,
+    neg_log10_p = -log10(fisher_result$p.value)
+  )
 }
