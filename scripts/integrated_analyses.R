@@ -17,6 +17,17 @@ pdo@meta.data$finalized_fine_anno_short[pdo@meta.data$finalized_fine_anno =="Lum
 
 pdo_circ <- read.csv("../data/organoid_circularity.csv")
 
+fgsea_results_lumtum <- readRDS(save_path, "fgsea_results_lumtum.rds") # this is generated in the unintegrated_analysis.R script
+t.n.lumtum <- read.csv(save_path, "t.nlumtum.csv") # this is generated in the unintegrated_analysis.R script
+
+#loading msigdb files
+# please export gmt files from msigdb: https://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
+hallmarks = read.gmt("path_to/h.all.v2022.1.Hs.symbols.gmt")
+c2_cp = read.gmt("path_to/c2.cp.v2022.1.Hs.symbols.gmt")
+c5_go = read.gmt("path_to/c5.go.v2022.1.Hs.symbols.gmt")
+
+msigdb_of_interest = c(hallmarks, c2_cp, c5_go)
+
 # 8.1 ligand receptor analysis  ####
 #vignette for basic: https://htmlpreview.github.io/?https://github.com/jinworks/CellChat/blob/master/tutorial/CellChat-vignette.html
 #vignette for comparing conditions: https://htmlpreview.github.io/?https://github.com/jinworks/CellChat/blob/master/tutorial/Comparison_analysis_of_multiple_datasets.html
@@ -199,7 +210,7 @@ for (i in 1:length(object.list)) {
 #> Do heatmap based on a single object
 ComplexHeatmap::draw(ht[[1]] + ht[[2]], ht_gap = unit(0.5, "cm"))
 
-# 8.2 pseudotime analysis ####
+# 8.2 pseudotime analysis on tumor ####
 #convert into monocle object using seurat wrappers and run basic preprocessing
 pdo_epi@reductions$umap <- pdo_epi@reductions$umap.scvi # monocle requires this format specifically
 pdo_lum <- subset(x = pdo_epi, subset = finalized_fine_anno %in% c("LT1", "LT2", "LT3", "LT4", "LT5", "LP", "LEC"))
@@ -462,7 +473,202 @@ ggplot(module_dynamics, aes(x=monocle3_pseudotime, y=value))+
   scale_color_manual(values = epi_fine_anno_colors_alpha[4:10])+
   xlab("Pseudotime")+ylab("Module Score")
 
-# 7.6 circularity analysis ####
+# 8.3 pseudotime analysis on immune ####
+# monocle 
+t_cells = subset(x = pdo, subset = finalized_broad_anno == "T")
+t_cells = quick_process(t_cells)
+do_clustree_integrated(obj = t_cells, res_seq = c(0.1, 1, 0.1)) 
+t_cells <- FindClusters(t_cells, resolution = 0.7) 
+t_cells <- RunUMAP(t_cells, dims = 1:20)
+scCustomize::DimPlot_scCustom(t_cells, reduction = "umap", figure_plot = T)
+scCustomize::DimPlot_scCustom(t_cells, reduction = "umap", figure_plot = T, group.by = "finalized_fine_anno")
+mon_pdoT <- SeuratWrappers::as.cell_data_set(t_cells)
+mon_pdoT <- cluster_cells(mon_pdoT, k=5) # need to set k smaller in order for this to function - too few cells?
+p1 <- plot_cells(mon_pdoT, show_trajectory_graph = FALSE)
+p2 <- plot_cells(mon_pdoT, color_cells_by = "partition", show_trajectory_graph = FALSE)
+wrap_plots(p1, p2)
+
+#generate trajectory path
+mon_pdoT <- learn_graph(mon_pdoT)
+plot_cells(mon_pdoT, label_groups_by_cluster = FALSE, label_leaves = FALSE, label_branch_points = FALSE)
+
+p1 <- plot_cells(mon_pdoT,
+                 color_cells_by = "finalized_fine_anno", label_cell_groups=FALSE,
+                 label_leaves=TRUE, label_branch_points=TRUE,
+                 graph_label_size=1.5, cell_size = 1, trajectory_graph_color = "red", alpha = 0.2, show_trajectory_graph = F)+
+  scale_color_manual(values = c("#724498", "#F4CD26", "#8CC63E", "#FB943B", "#2989E3", "#F02C89"))
+p1$layers[[1]]$aes_params$colour <- 'transparent'
+p1
+
+mon_pdoT <- order_cells(mon_pdoT)
+plot_cells(mon_pdoT, color_cells_by = "pseudotime", label_cell_groups = FALSE, label_leaves = FALSE, 
+           label_branch_points = FALSE)
+
+saveRDS(mon_pdoT, file.path(save_path, "mon_pdoT.rds"))
+
+# K2taxonomer
+t_subset <- t_cells
+t_subset$`finalized_fine_anno` <- as.factor(t_subset$`finalized_fine_anno`)
+t_subset$`finalized_fine_anno` <- droplevels(t_subset$`finalized_fine_anno`)
+
+# convert to expression set
+eSet = ExpressionSet(assayData = as.matrix(GetAssayData(t_subset)))
+Biobase::pData(eSet) <- as.data.frame(t_subset@meta.data)
+typeTable <- table(eSet$finalized_fine_anno, useNA="ifany")
+print(typeTable)
+eSet <- eSet[, !is.na(eSet$finalized_fine_anno)] # remove NAs
+eSet <- eSet[, eSet$finalized_fine_anno %in% names(typeTable)[typeTable >= 5]] ## keep cell types with at least 5 observations
+eSet$celltype <- gsub(" ", "_", eSet$finalized_fine_anno)
+
+# create clustList
+wrapperList <- list(
+  eMat=Biobase::exprs(eSet),
+  labs=eSet$celltype,
+  maxIter=10
+)
+
+# run K2Taxonomer
+K2res <- K2preproc(eSet,
+                   cohorts="celltype",
+                   featMetric="F",
+                   logCounts=TRUE,
+                   nBoots=100,
+                   clustFunc=cKmeansWrapperSubsample,
+                   clustList=wrapperList)
+
+K2res <- K2tax(K2res) # Run K2Taxonomer aglorithm
+
+# dendrogram
+dendro <- K2dendro(K2res)
+ggdendro::ggdendrogram(dendro)
+
+# annotate results
+K2res <- runDGEmods(K2res)
+DGEtable <- getDGETable(K2res)
+head(DGEtable)
+
+# gene set hyperenrichment
+genes <- unique(DGEtable$gene)
+K2res <- runGSEmods(K2res,
+                    genesets=msigdb_of_interest,
+                    qthresh=0.1)
+saveRDS(K2res, file.path(save_path, "imm_k2res.rds.rds"))
+
+# making a plot of hyperenrichment results at node of interest
+tohightlight = c(
+  "BIOCARTA_TCYTOTOXIC_PATHWAY", 
+  "REACTOME_COSTIMULATION_BY_THE_CD28_FAMILY",
+  "GOBP_T_CELL_ACTIVATION",
+  "BIOCARTA_IL7_PATHWAY",
+  "HALLMARK_INTERFERON_GAMMA_RESPONSE",
+  "PID_IL2_1PATHWAY",
+  "REACTOME_CYTOKINE_SIGNALING_IN_IMMUNE_SYSTEM",
+  "HALLMARK_INFLAMMATORY_RESPONSE",
+  "GOBP_T_CELL_DIFFERENTIATION",
+  "GOBP_CELL_CHEMOTAXIS")
+
+tohightlight = c(
+  "GOBP_INTEGRATED_STRESS_RESPONSE_SIGNALING",
+  "HALLMARK_UNFOLDED_PROTEIN_RESPONSE",
+  "GOBP_INTRINSIC_APOPTOTIC_SIGNALING_PATHWAY_IN_RESPONSE_TO_ENDOPLASMIC_RETICULUM_STRESS",
+  "REACTOME_RESPONSE_OF_EIF2AK4_GCN2_TO_AMINO_ACID_DEFICIENCY",
+  "HALLMARK_APOPTOSIS",
+  "GOBP_RESPONSE_TO_OXIDATIVE_STRESS",
+  "REACTOME_CELLULAR_RESPONSE_TO_STARVATION",
+  "HALLMARK_OXIDATIVE_PHOSPHORYLATION",
+  "REACTOME_PD_1_SIGNALING",
+  "HALLMARK_REACTIVE_OXYGEN_SPECIES_PATHWAY"
+)
+
+cherry = subset(K2res@results$B$gse$g1_up, category %in% tohightlight)
+
+cherry <- cherry %>% dplyr::mutate(
+  short_name = case_when(
+    grepl("BIOCARTA_TCYTOTOXIC_PATHWAY", category) ~ "CYTOTOXICITY",
+    grepl("REACTOME_COSTIMULATION_BY_THE_CD28_FAMILY", category) ~ "CD28 COSTIMULATION",
+    grepl("GOBP_T_CELL_ACTIVATION", category) ~ "T CELL ACTIVATION",
+    grepl("BIOCARTA_IL7_PATHWAY", category) ~ "IL7 SIGNALING",
+    grepl("HALLMARK_INTERFERON_GAMMA_RESPONSE", category) ~ "IFN-γ RESPONSE",
+    grepl("PID_IL2_1PATHWAY", category) ~ "IL2 SIGNALING",
+    grepl("REACTOME_CYTOKINE_SIGNALING_IN_IMMUNE_SYSTEM", category) ~ "CYTOKINE SIGNALING",
+    grepl("HALLMARK_INFLAMMATORY_RESPONSE", category) ~ "INFLAMMATION",
+    grepl("GOBP_T_CELL_DIFFERENTIATION", category) ~ "DIFFERENTIATION",
+    grepl("GOBP_CELL_CHEMOTAXIS", category) ~ "CHEMOTAXIS",
+    
+    grepl("GOBP_INTEGRATED_STRESS_RESPONSE_SIGNALING", category) ~ "STRESS RESPONSE",
+    grepl("HALLMARK_UNFOLDED_PROTEIN_RESPONSE", category) ~ "UPR",
+    grepl("GOBP_INTRINSIC_APOPTOTIC_SIGNALING_PATHWAY_IN_RESPONSE_TO_ENDOPLASMIC_RETICULUM_STRESS", category) ~ "ER STRESS APOPTOSIS",
+    grepl("REACTOME_RESPONSE_OF_EIF2AK4_GCN2_TO_AMINO_ACID_DEFICIENCY", category) ~ "METABOLIC STRESS",
+    grepl("HALLMARK_APOPTOSIS", category) ~ "APOPTOSIS",
+    grepl("GOBP_RESPONSE_TO_OXIDATIVE_STRESS", category) ~ "OXIDATIVE STRESS",
+    grepl("REACTOME_CELLULAR_RESPONSE_TO_STARVATION", category) ~ "STARVATION RESPONSE",
+    grepl("HALLMARK_OXIDATIVE_PHOSPHORYLATION", category) ~ "OXIDATIVE PHOSPHORYLATION",
+    grepl("REACTOME_PD_1_SIGNALING", category) ~ "PD-1 SIGNALING",
+    grepl("HALLMARK_REACTIVE_OXYGEN_SPECIES_PATHWAY", category) ~ "ROS PATHWAY",
+    TRUE ~ category  # default to the original name if no match
+  )
+)
+
+sorted_pathways <- cherry %>% dplyr::arrange(desc(fdr)) %>% dplyr::pull(short_name)
+
+cherry <- cherry %>%
+  mutate(fdr_fix = ifelse(fdr <= 1e-07, 1e-07, fdr))
+
+ggplot(cherry, aes(reorder(short_name, -fdr), fdr_fix)) +
+  geom_hline(yintercept = 0) +
+  geom_point(aes(size = nhits), col = "blue") +
+  scale_y_log10()+
+  scale_size_continuous(range = c(3,8)) +
+  coord_flip() +
+  labs(x="", y="False Discovery Rate", size = "Number of Genes") +
+  theme_minimal() +
+  theme(axis.line.y.left =element_line(color="white"),
+        axis.ticks.y=element_blank(),
+        legend.position = "bottom") + 
+  guides(size = guide_legend(override.aes = list(alpha = 0.1)))
+
+# volcano plot
+volcano <- K2res@results$B$dge %>%
+  mutate(
+    FC = ifelse(edge == "1", -coef, coef),  # Adjust FC based on direction
+    group = case_when(
+      FC > 0 ~ "up",     
+      FC < 0 ~ "down",     
+    )
+  )
+
+canonical_tcell_genes <- c(
+  "TCF7", "LEF1", "IL7R", "IKZF1", "KLF2", "TBX21", # t cell identity & differentiation
+  "CD2", "PTPRC", "TRAC", "CXCR4", "SELL", # core surface molecules / lineage markers
+  "CCL5", "GZMK" # effector / migration markers
+)
+canonical_upr_genes <- c(
+  "ATF4", "DDIT3", "XBP1", # key transcriptional regulators
+  "PPP1R15A", "SAT1", # downstream targets
+  "ERO1LB", "GAS5" # co-factors & stress sensors
+)
+
+volcano <- volcano %>%
+  mutate(label = ifelse(gene %in% c(canonical_tcell_genes, canonical_upr_genes), gene, NA))
+
+
+ggplot(volcano, aes(x=FC, y=-log10(fdr)))+
+  geom_point(aes(col = group), alpha = 0.2, size = 2)+
+  geom_label_repel(
+    data = subset(volcano, !is.na(label)),
+    aes(label = label, x = FC, y = -log10(fdr)),
+    size = 3,
+    box.padding = 0.1,
+    fill = "white",
+    max.overlaps = 20)+
+  theme_minimal()+
+  theme(legend.position = "none")+
+  scale_color_manual(values = c("red", "blue"))+
+  xlab("log2 Fold Change") +
+  ylab("-log10 False Discovery Rate")
+
+
+# 8.4 circularity analysis ####
 pdo_circ$corrected_treatment[pdo_circ$treatment =="C"] <- "UT"
 pdo_circ$corrected_treatment[pdo_circ$treatment =="N"] <- "NET"
 pdo_circ$corrected_treatment[pdo_circ$treatment =="T"] <- "DET"
@@ -491,3 +697,68 @@ ggplot(pdo_circ, aes(x=corrected_treatment, y=circularity))+
   theme(legend.position = "none")+
   xlab("")+ ylab("Circularity Score")+
   scale_fill_manual(values = treatment_colors)
+
+# 8.5 miRNA prediction analysis ####
+down_DE_genes <- t.n.lumtum[t.n.lumtum$avg_log2FC < 0 & t.n.lumtum$p_val_adj < 0.05, "X"]
+miR_ofinterest <- c("hsa-miR-374a-5p", "hsa-miR-93-5p", "hsa-let-7b-3p")
+
+mir_data <- lapply(miR_ofinterest, get_unique_pairs)
+names(mir_data) = miR_ofinterest
+
+mir_data_df <- rbind(mir_data$`hsa-miR-374a-5p`, mir_data$`hsa-miR-93-5p`, mir_data$`hsa-let-7b-3p`)
+
+# all 3 together - fisher and hypergeometric
+all_genes <- unique(rownames(pdo[["SCT"]]$counts))
+mir_targets <- unique(mir_data_df$target_symbol)
+
+A <- length(intersect(mir_targets, down_DE_genes))              # targets in downregulated
+B <- length(setdiff(mir_targets, down_DE_genes))                # targets not in downregulated
+
+non_targets <- setdiff(all_genes, mir_targets)
+C <- length(intersect(non_targets, down_DE_genes))              # non-targets in downregulated
+D <- length(setdiff(non_targets, down_DE_genes))                # non-targets not in downregulated
+
+contingency <- matrix(c(A, B, C, D), nrow = 2,
+                      dimnames = list("miRNA_target" = c("Yes", "No"),
+                                      "In_DE_down" = c("Yes", "No")))
+
+fisher.test(contingency, alternative = "greater") # p val 2.2e-16, odds ratio 3.606607
+
+N <- length(all_genes)                 # total number of testable genes
+K <- length(unique(mir_targets))            # all targets of all 3 miRNAs
+n <- length(down_DE_genes)            # all downregulated genes
+x <- length(intersect(down_DE_genes, mir_targets))  # downregulated & targeted
+
+phyper(q = x - 1, m = K, n = N - K, k = n, lower.tail = FALSE) # pval 3.870789e-186
+
+enrichment_results <- do.call(rbind, lapply(miR_ofinterest, function(mir) {
+  enrichment(mir, unique_pairs = mir_data_df, down_DE_genes, t.n.lumtum, all_genes)
+}))
+
+# plotting
+enrichment_results$perc_down = enrichment_results$num_targets_down/enrichment_results$total_num_targets
+min_size <- min(enrichment_results$num_targets_down, na.rm = TRUE)
+max_size <- max(enrichment_results$num_targets_down, na.rm = TRUE)
+
+ggplot(enrichment_results, aes(x = odds_ratio, y = reorder(miRNA, odds_ratio),
+                               size = num_targets_down, color = neg_log10_p)) +
+  geom_point() +
+  geom_vline(xintercept = 1, col = "grey60", linewidth = 1) +
+  scale_color_gradientn(colours = extra_yelred(100), name = "-log10(p-value)", guide = "colorbar") +
+  scale_size_continuous(range = c(8, 15), name = "Targets Downregulated",
+                        breaks = c(min_size, max_size), labels = c(min_size, max_size)) +
+  labs(y = "",x = "Odds Ratio") +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.box = "horizontal",
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9),
+    axis.text.y = element_text(size = 16),
+    axis.line.y.left = element_line(color = "white"),
+    axis.ticks.y = element_blank()
+  ) +
+  guides(
+    size = guide_legend(override.aes = list(alpha = 0.1)),
+    color = guide_colorbar(barwidth = 5, barheight = 0.6)
+  )
