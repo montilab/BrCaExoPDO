@@ -4,9 +4,7 @@ This folder contains two key datasets generated from our study: the single-cell 
 
 ## Access and Explore the Data
 
-- **Raw Data**: The raw single-cell RNA sequencing data associated with this study can be downloaded from the Gene Expression Omnibus (GEO) database from [GSEXXXXX](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSEXXXXX).
-
-- **Interactive Exploration**: Explore the single-cell dataset interactively on [CellxGene](https://cellxgene.cziscience.com/collections/xxxxxx).
+- **Raw Data**: The raw single-cell RNA sequencing data associated with this study can be downloaded from the Gene Expression Omnibus (GEO) database from [GSE302054](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE302054).
 
 ## Datasets
 
@@ -55,4 +53,4 @@ The cell type annotations in `pdo_metadata.csv`, particularly the cluster labels
 ## Usage Notes
 
 - **Privacy Considerations**: The data provided here does not include any patient-identifiable information. Ensure that any downstream analyses also comply with relevant ethical guidelines.
-- **Citation**: If you use this dataset in your research, please cite [our paper](https://www.biorxiv.org/) as well as the Wu et al. paper for the annotations.
+- **Citation**: If you use this dataset in your research, please cite [our paper](https://www.biorxiv.org/content/10.1101/2024.09.13.612950v1.abstract) as well as the Wu et al. paper for the annotations.
