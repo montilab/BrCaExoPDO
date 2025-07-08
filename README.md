@@ -11,8 +11,7 @@ In this study, we developed patient-derived organoids (PDOs) from breast tumor r
 
 ### 1. [Data](data)
    - Contains single-cell metadata (`pdo_metadata.csv`) and organoid circularity measurements (`organoid_circularity.csv`).
-   - Raw data can be accessed via [GEO](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSEXXXXX).
-   - Interactive exploration available on [CellxGene](https://cellxgene.cziscience.com/collections/xxxxxx).
+   - Raw data can be accessed via [GEO](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE302054).
 
 ### 2. [Scripts](scripts)
    - Includes all scripts used for data processing, analysis, and figure generation.
@@ -24,13 +23,13 @@ In this study, we developed patient-derived organoids (PDOs) from breast tumor r
 
 ## BioRxiv Preprint
 
-For detailed methodology and comprehensive results, please refer to our full preprint available on [bioRxiv](https://www.biorxiv.org/)
+For detailed methodology and comprehensive results, please refer to our full preprint available on [bioRxiv](https://www.biorxiv.org/content/10.1101/2024.09.13.612950v1.abstract)
 
 ## Abstract
 
-Women with obesity-driven diabetes are predisposed to more aggressive breast cancers. However, patient metabolic status does not currently inform clinical management. We previously identified plasma exosomes as functionally critical actors in intercellular communication and drivers of tumor progression. Here, we generated patient-derived organoids (PDOs) from breast tumor resections to model signaling within the tumor microenvironment (TME). Novel techniques and a short (1-week) culture preserved native tumor-infiltrating lymphocytes for the first time in breast tumor PDOs. After 3-day exosome treatment, we measured the impact of exosomal signaling on PDOs via single-cell RNA sequencing. Exosomes derived from Type 2 diabetic patient plasma significantly upregulated pathways associated with epithelial-to-mesenchymal transition, invasiveness, and cancer stemness, compared to non-diabetic exosome controls. Intratumoral heterogeneity and immune evasion increased in the diabetic context, consistent with enhanced tumor aggressiveness and metastatic potential of these PDOs. Our model of systemic metabolic dysregulation and perturbed transcriptional networks enhances understanding of dynamic interactions within the TME in obesity-driven diabetes and offers new insights into novel exosomal communication.
+Women with obesity-driven type 2 diabetes (T2D) face worse breast cancer outcomes, yet metabolic status does not fully inform current standards of care. We previously identified plasma exosomes as key drivers of tumor progression; however, their effect on immune cells within the tumor microenvironment (TME) remains unclear. Using a novel patient-derived organoid (PDO) system that preserves native tumor-infiltrating lymphocytes (TILs), we show that T2D plasma exosomes induce a 13.6-fold expansion of immunosuppressive TILs relative to nondiabetic controls. This immune dysfunction may promote micrometastatic survival and resistance to checkpoint blockade, a known issue in T2D cancer patients. Tumor-intrinsic analysis revealed a 1.5-fold increase in intratumoral heterogeneity and 2.3-fold upregulation of aggressive signaling networks. These findings reveal how T2D-associated metabolic dysregulation alters tumor–immune crosstalk through previously underappreciated exosomal signaling, impairing antitumor immunity and accelerating progression. Understanding these dynamics could inform tailored therapies for this high-risk, underserved patient population.
 
 ## How to Cite
 
 If you use any data or scripts from this repository in your research, please cite our paper as follows:
-- Ennis, C.S., Seen, M., Chen, A., Kang, H., Ilinski, A., Mahdaviani, K., Ko, N., Monti, S., and Denis, G.V., 2024. Plasma exosomes from individuals with type 2 diabetes drive breast cancer aggression in patient-derived organoids. (leaving blank until submitted)
+- Ennis, C.S., Seen, M., Chen, A., Kang, H., Ilinski, A., Mahdaviani, K., Ko, N., Monti, S., and Denis, G.V., 2025. Plasma exosomes from individuals with type 2 diabetes drive breast cancer aggression in patient-derived organoids. (leaving blank until submitted)
