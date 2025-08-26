@@ -53,4 +53,4 @@ The cell type annotations in `pdo_metadata.csv`, particularly the cluster labels
 ## Usage Notes
 
 - **Privacy Considerations**: The data provided here does not include any patient-identifiable information. Ensure that any downstream analyses also comply with relevant ethical guidelines.
-- **Citation**: If you use this dataset in your research, please cite [our paper](https://www.biorxiv.org/content/10.1101/2024.09.13.612950v1.abstract) as well as the Wu et al. paper for the annotations.
+- **Citation**: If you use this dataset in your research, please cite [our paper](https://www.nature.com/articles/s42003-025-08663-y) as well as the Wu et al. paper for the annotations.
